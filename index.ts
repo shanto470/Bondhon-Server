@@ -143,6 +143,40 @@ app.post(
   }),
 );
 
+// Upcoming events only, optional ?q=search&type=Cleanup
+app.get(
+  "/events",
+  h(async (req, res) => {
+    const q = String(req.query.q ?? "").trim();
+    const type = String(req.query.type ?? "").trim();
+    const filter: Record<string, unknown> = {
+      eventDate: { $gte: todayStr() },
+    };
+    if (type && type !== "All") filter.eventType = type;
+    if (q) {
+      const rx = { $regex: escapeRegex(q), $options: "i" };
+      filter.$or = [{ title: rx }, { location: rx }];
+    }
+    const result = await eventCollection
+      .find(filter)
+      .sort({ eventDate: 1, _id: 1 })
+      .toArray();
+    res.send(result);
+  }),
+);
+
+app.get(
+  "/featured-events",
+  h(async (req, res) => {
+    const result = await eventCollection
+      .find({ eventDate: { $gte: todayStr() } })
+      .sort({ eventDate: 1, _id: 1 })
+      .limit(6)
+      .toArray();
+    res.send(result);
+  }),
+);
+
 
 app.get("/", (req, res) => {
   res.send({ message: "Server is running fine!" });
