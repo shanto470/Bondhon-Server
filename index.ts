@@ -8,6 +8,17 @@ const app = express();
 const PORT = Number(process.env.PORT) || 8000;
 const TIMEZONE = process.env.APP_TIMEZONE || "Asia/Dhaka";
 
+const EVENT_TYPES = [
+  "Cleanup",
+  "Plantation",
+  "Donation",
+  "Food Relief",
+  "Blood Drive",
+  "Health Camp",
+  "Education",
+  "Other",
+];
+
 const client = new MongoClient(process.env.MONGODB_URI as string);
 
 export async function connectToMongoDB() {
@@ -61,6 +72,32 @@ const h =
         res.status(500).send({ msg: "Server Error!" });
       });
 
+function cleanEvent(body: Record<string, unknown>, originalDate?: string) {
+  const s = (v: unknown) => (typeof v === "string" ? v.trim() : "");
+  const data = {
+    title: s(body.title),
+    description: s(body.description),
+    eventType: s(body.eventType),
+    thumbnail: s(body.thumbnail),
+    location: s(body.location),
+    eventDate: s(body.eventDate),
+  };
+  let error = "";
+  if (data.title.length < 3) error = "Title must be at least 3 characters.";
+  else if (data.description.length < 20)
+    error = "Description must be at least 20 characters.";
+  else if (!EVENT_TYPES.includes(data.eventType))
+    error = "Pick a valid event type.";
+  else if (!isUrl(data.thumbnail))
+    error = "Thumbnail must be a valid http(s) image URL.";
+  else if (data.location.length < 3) error = "Location is required.";
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(data.eventDate))
+    error = "Event date is invalid.";
+  else if (data.eventDate !== originalDate && data.eventDate <= todayStr())
+    error = "The event date must be in the future.";
+  return { data, error };
+}
+
 // ---------- auth (JWT issued by Better Auth on the client app) ----------
 const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
@@ -86,6 +123,25 @@ const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
     return res.status(401).send({ msg: "Invalid or expired token!" });
   }
 };
+
+// ---------- events ----------
+app.post(
+  "/add-event",
+  verifyToken,
+  h(async (req, res) => {
+    const { data, error } = cleanEvent(req.body ?? {});
+    if (error) return res.status(400).send({ msg: error });
+    const { email, name } = res.locals.user;
+    const result = await eventCollection.insertOne({
+      ...data,
+      email, // owner, taken from the verified token, never from the body
+      organizer: name,
+      participants: 0,
+      createdAt: new Date().toISOString(),
+    });
+    res.send(result);
+  }),
+);
 
 
 app.get("/", (req, res) => {
