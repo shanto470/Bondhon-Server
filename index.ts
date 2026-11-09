@@ -177,6 +177,18 @@ app.get(
   }),
 );
 
+// Public: anyone can read the details
+app.get(
+  "/event/:id",
+  h(async (req, res) => {
+    const _id = toId(req.params.id);
+    if (!_id) return res.status(400).send({ msg: "Invalid event id." });
+    const result = await eventCollection.findOne({ _id });
+    if (!result) return res.status(404).send({ msg: "Event not found." });
+    res.send(result);
+  }),
+);
+
 
 app.get("/", (req, res) => {
   res.send({ message: "Server is running fine!" });
