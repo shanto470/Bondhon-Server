@@ -189,6 +189,45 @@ app.get(
   }),
 );
 
+app.patch(
+  "/event/:id",
+  verifyToken,
+  h(async (req, res) => {
+    const _id = toId(req.params.id);
+    if (!_id) return res.status(400).send({ msg: "Invalid event id." });
+    const existing = await eventCollection.findOne({ _id });
+    if (!existing) return res.status(404).send({ msg: "Event not found." });
+    if (existing.email !== res.locals.user.email)
+      return res
+        .status(403)
+        .send({ msg: "You can only update events you created." });
+
+    const { data, error } = cleanEvent(req.body ?? {}, existing.eventDate);
+    if (error) return res.status(400).send({ msg: error });
+    const result = await eventCollection.updateOne({ _id }, { $set: data });
+    res.json(result);
+  }),
+);
+
+app.delete(
+  "/event/:id",
+  verifyToken,
+  h(async (req, res) => {
+    const _id = toId(req.params.id);
+    if (!_id) return res.status(400).send({ msg: "Invalid event id." });
+    const existing = await eventCollection.findOne({ _id });
+    if (!existing) return res.status(404).send({ msg: "Event not found." });
+    if (existing.email !== res.locals.user.email)
+      return res
+        .status(403)
+        .send({ msg: "You can only delete events you created." });
+
+    const result = await eventCollection.deleteOne({ _id });
+    await joinCollection.deleteMany({ eventId: req.params.id });
+    res.json(result);
+  }),
+);
+
 
 app.get("/", (req, res) => {
   res.send({ message: "Server is running fine!" });
