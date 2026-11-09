@@ -228,6 +228,22 @@ app.delete(
   }),
 );
 
+// Events created by the logged-in user (includes past ones, for management)
+app.get(
+  "/my-events/:email",
+  verifyToken,
+  h(async (req, res) => {
+    if (req.params.email !== res.locals.user.email)
+      return res.status(403).send({ msg: "Forbidden!" });
+    const result = await eventCollection
+      .find({ email: req.params.email })
+      .sort({ eventDate: 1 })
+      .toArray();
+    res.send(result);
+  }),
+);
+
+
 
 app.get("/", (req, res) => {
   res.send({ message: "Server is running fine!" });
