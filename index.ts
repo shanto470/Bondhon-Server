@@ -2,7 +2,7 @@ import express, { NextFunction, Request, Response } from "express";
 import { MongoClient, ObjectId } from "mongodb";
 import cors from "cors";
 import "dotenv/config";
-import { createRemoteJWKSet } from "jose";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 
 const app = express();
 const PORT = Number(process.env.PORT) || 8000;
@@ -61,7 +61,31 @@ const h =
         res.status(500).send({ msg: "Server Error!" });
       });
 
+// ---------- auth (JWT issued by Better Auth on the client app) ----------
+const verifyToken = async (req: Request, res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) {
+    return res.status(401).send({ msg: "Unauthorized!" });
+  }
+  const token = authHeader.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ msg: "Unauthorized!" });
+  }
 
+  try {
+    const { payload } = await jwtVerify(token, JWKS);
+    if (!payload.email) {
+      return res.status(401).send({ msg: "Unauthorized!" });
+    }
+    res.locals.user = {
+      email: String(payload.email),
+      name: String(payload.name ?? "Volunteer"),
+    };
+    next();
+  } catch (error) {
+    return res.status(401).send({ msg: "Invalid or expired token!" });
+  }
+};
 
 
 app.get("/", (req, res) => {
