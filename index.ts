@@ -243,6 +243,66 @@ app.get(
   }),
 );
 
+// ---------- joining ----------
+app.post(
+  "/join-event",
+  verifyToken,
+  h(async (req, res) => {
+    const eventId = String(req.body?.eventId ?? "");
+    const _id = toId(eventId);
+    if (!_id) return res.status(400).send({ msg: "Invalid event id." });
+
+    const event = await eventCollection.findOne({ _id });
+    if (!event) return res.status(404).send({ msg: "Event not found." });
+    if (event.eventDate < todayStr())
+      return res.status(400).send({ msg: "This event has already ended." });
+
+    const { email, name } = res.locals.user;
+    const already = await joinCollection.findOne({ eventId, userEmail: email });
+    if (already)
+      return res.status(409).send({ msg: "You've already joined this event." });
+
+    const result = await joinCollection.insertOne({
+      eventId,
+      eventTitle: event.title,
+      eventDate: event.eventDate,
+      userEmail: email,
+      userName: name,
+      joinedAt: new Date().toISOString(),
+    });
+    await eventCollection.updateOne({ _id }, { $inc: { participants: 1 } });
+    res.send(result);
+  }),
+);
+
+app.delete(
+  "/join-event/:eventId",
+  verifyToken,
+  h(async (req, res) => {
+    const { eventId } = req.params;
+    const result = await joinCollection.deleteOne({
+      eventId,
+      userEmail: res.locals.user.email,
+    });
+    const _id = toId(eventId);
+    if (result.deletedCount && _id) {
+      await eventCollection.updateOne({ _id }, { $inc: { participants: -1 } });
+    }
+    res.send(result);
+  }),
+);
+
+app.get(
+  "/is-joined/:eventId",
+  verifyToken,
+  h(async (req, res) => {
+    const found = await joinCollection.findOne({
+      eventId: req.params.eventId,
+      userEmail: res.locals.user.email,
+    });
+    res.send({ joined: Boolean(found) });
+  }),
+);
 
 
 app.get("/", (req, res) => {
