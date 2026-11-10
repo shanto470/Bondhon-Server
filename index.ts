@@ -40,7 +40,6 @@ const db = mongoClient.db("bondhon");
 const eventCollection = db.collection("events");
 const joinCollection = db.collection("joinedEvents");
 
-
 // ---------- helpers ----------
 const JWKS = createRemoteJWKSet(
   new URL(`${process.env.CLIENT_URL}/api/auth/jwks`),
@@ -304,6 +303,26 @@ app.get(
   }),
 );
 
+// Events the logged-in user joined, sorted by event date
+app.get(
+  "/joined-events/:email",
+  verifyToken,
+  h(async (req, res) => {
+    if (req.params.email !== res.locals.user.email)
+      return res.status(403).send({ msg: "Forbidden!" });
+    const joins = await joinCollection
+      .find({ userEmail: req.params.email })
+      .toArray();
+    const ids = joins
+      .map((j) => toId(j.eventId))
+      .filter((x): x is ObjectId => x !== null);
+    const result = await eventCollection
+      .find({ _id: { $in: ids } })
+      .sort({ eventDate: 1 })
+      .toArray();
+    res.send(result);
+  }),
+);
 
 app.get("/", (req, res) => {
   res.send({ message: "Server is running fine!" });
